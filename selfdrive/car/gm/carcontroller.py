@@ -23,7 +23,7 @@ TransmissionType = car.CarParams.TransmissionType
 # Camera cancels up to 0.1s after brake is pressed, ECM allows 0.5s
 CAMERA_CANCEL_DELAY_FRAMES = 10
 # Enforce a minimum interval between steering messages to avoid a fault
-MIN_STEER_MSG_INTERVAL_MS = 10
+MIN_STEER_MSG_INTERVAL_MS = 15
 # Constants for pitch compensation
 PITCH_DEADZONE = 0.01  # [radians] 0.01 ≈ 1% grade
 BRAKE_PITCH_FACTOR_BP = [5., 10.]  # [m/s] smoothly revert to planned accel at low speeds
@@ -170,21 +170,21 @@ class CarController(CarControllerBase):
       # Midpoint spoof: one per interval
       if not self.spoof_mid_sent and interval_ns > 0:
         midpoint_ns = self.prev_steer_ts_ns + interval_ns // 2
-        if now_nanos >= midpoint_ns and now_nanos - self.last_steer_ts_ns >= 5_000_000:
+        if now_nanos >= midpoint_ns and now_nanos - self.last_steer_ts_ns >= 16_000_000:
           paddle_sends.append(gmcan.create_prndl2_command(self.packer_pt, CanBus.POWERTRAIN, True))
           paddle_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN, True))
           self.last_spoof_ts_ns = now_nanos
           self.spoof_mid_sent = True
 
       # Overflow spoof: insert extra when accumulator allows
-      if self.spoof_accum >= 0.7 and not self.spoof_over_sent and interval_ns > 0:
+      if self.spoof_accum >= 0.5 and not self.spoof_over_sent and interval_ns > 0:
         slot2_ns = self.prev_steer_ts_ns + (interval_ns * 2) // 3
-        if now_nanos >= slot2_ns and now_nanos - self.last_steer_ts_ns >= 5_000_000:
+        if now_nanos >= slot2_ns and now_nanos - self.last_steer_ts_ns >= 22_000_000:
           paddle_sends.append(gmcan.create_prndl2_command(self.packer_pt, CanBus.POWERTRAIN, True))
           paddle_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN, True))
           self.last_spoof_ts_ns = now_nanos
           self.spoof_over_sent = True
-          self.spoof_accum -= 0.7
+          self.spoof_accum -= 0.5
     # === End Spoof scheduling ===
 
     # === Off-pulse scheduling on regen release ===
@@ -200,7 +200,7 @@ class CarController(CarControllerBase):
 
     if hasattr(self, "off_schedule_ns"):
       for i, t_ns in enumerate(self.off_schedule_ns):
-        if not self.off_sent[i] and now_nanos >= t_ns and now_nanos - self.last_steer_ts_ns >= 5_000_000:
+        if not self.off_sent[i] and now_nanos >= t_ns and now_nanos - self.last_steer_ts_ns >= 16_000_000:
           paddle_sends.append(gmcan.create_prndl2_command(self.packer_pt, CanBus.POWERTRAIN, False))
           paddle_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN, False))
           self.off_sent[i] = True
@@ -252,8 +252,8 @@ class CarController(CarControllerBase):
 
     # Merge paddle spoof CAN frames, time-guarded only
     if paddle_sends:
-      # wait at least 5 ms after the last bus0 steer send
-      if now_nanos - self.last_steer_ts_ns >= 5_000_000:
+      # wait at least 15 ms after the last bus0 steer send
+      if now_nanos - self.last_steer_ts_ns >= 15_000_000:
         can_sends.extend(paddle_sends)
 
     if self.CP.openpilotLongitudinalControl:
