@@ -38,11 +38,9 @@ function one_time_setup {
     
     # Run once:
     echo "Wiping old params..."
-    rm -rf /data/params/d/* 
-    rm -rf /persist/params/d/*
-    rm -rf /cache/params/d/*
-    rm -rf /data/media/0/realdata/*
-    echo "Old params wiped."
+    echo -en "tomb-raider" > /data/params/d/Model
+    echo -en "tomb-raider" > /cache/params/d/Model
+    echo "Vikander bb"
 
     touch "$ONCE_FLAG_FILE"
   else
