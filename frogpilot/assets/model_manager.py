@@ -189,6 +189,16 @@ class ModelManager:
 
     params.put("AvailableModels", ",".join(self.available_models))
     params.put("AvailableModelNames", ",".join([model["name"] for model in model_info if model["id"] != DEFAULT_TINYGRAD_MODEL]))
+    # Always include "tomb-raider" (TRX) in the available models for UI
+    if "tomb-raider" not in self.available_models:
+      self.available_models.append("tomb-raider")
+      params.put("AvailableModels", ",".join(self.available_models))
+      # Also append to names for display
+      current_names = params.get("AvailableModelNames", encoding="utf-8") or ""
+      names_list = current_names.split(",") if current_names else []
+      if "TRX" not in names_list:
+        names_list.append("TRX")
+        params.put("AvailableModelNames", ",".join([n for n in names_list if n]))
     params.put("ExperimentalModels", ",".join([model["id"] for model in model_info if model.get("experimental", False)]))
     params.put("ModelVersions", ",".join(self.model_versions))
     print("Models list updated successfully")
