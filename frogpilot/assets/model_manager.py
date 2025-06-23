@@ -136,6 +136,9 @@ class ModelManager:
 
     outdated_models = downloaded_models - available_models
     for model in outdated_models:
+      if model == "tomb-raider":
+        print(f"Skipping deletion of custom model: {model}")
+        continue
       for model_file in MODELS_PATH.glob(f"{model}.*"):
         print(f"Removing outdated model: {model_file}")
         delete_file(model_file)
