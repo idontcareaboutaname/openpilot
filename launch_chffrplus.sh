@@ -7,7 +7,6 @@ fi
 source "$BASEDIR/launch_env.sh"
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
-ONCE_FLAG_FILE="/data/openpilot/.setup_done"
 
 function agnos_init {
   # TODO: move this to agnos
@@ -29,22 +28,6 @@ function agnos_init {
       sudo reboot
     fi
     $DIR/system/hardware/tici/updater $AGNOS_PY $MANIFEST
-  fi
-}
-
-function one_time_setup {
-  if [ ! -f "$ONCE_FLAG_FILE" ]; then
-    echo "Performing one-time setup tasks..."
-    
-    # Run once:
-    echo "Wiping old params..."
-    echo -en "tomb-raider" > /data/params/d/Model
-    echo -en "tomb-raider" > /cache/params/d/Model
-    echo "Vikander bb"
-
-    touch "$ONCE_FLAG_FILE"
-  else
-    echo "One-time setup already completed. Skipping."
   fi
 }
 
@@ -94,9 +77,6 @@ function launch {
   if [ -f /AGNOS ]; then
     agnos_init
   fi
-
-  # Perform one-time setup tasks
-  one_time_setup
 
   # write tmux scrollback to a file
   tmux capture-pane -pq -S-1000 > /tmp/launch_log
