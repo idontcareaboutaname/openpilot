@@ -54,9 +54,15 @@ class CarState(CarStateBase):
 
     # Variables used for avoiding LKAS faults
 
-    # Track timestamps for OEM PRNDL2 and Regen Paddle messages (used to sync spoofing timing)
-    self.prndl2_ts_nanos = pt_cp.ts_nanos["ECMPRDNL2"]["PRNDL2"]
-    self.regen_paddle_ts_nanos = pt_cp.ts_nanos["EBCMRegenPaddle"]["RegenPaddle"]
+    # Only track timestamps if this car supports direct transmission PRNDL2 and regen paddle
+    if self.CP.transmissionType == TransmissionType.direct:
+      # ECMPRDNL2 should always exist for direct-transmission cars
+      self.prndl2_ts_nanos = pt_cp.ts_nanos.get("ECMPRDNL2", {}).get("PRNDL2", 0)
+      # Regen paddle may not be present on all direct-transmission cars
+      self.regen_paddle_ts_nanos = pt_cp.ts_nanos.get("EBCMRegenPaddle", {}).get("RegenPaddle", 0)
+    else:
+      self.prndl2_ts_nanos = 0
+      self.regen_paddle_ts_nanos = 0
     self.loopback_lka_steering_cmd_updated = len(loopback_cp.vl_all["ASCMLKASteeringCmd"]["RollingCounter"]) > 0
     if self.loopback_lka_steering_cmd_updated:
       self.loopback_lka_steering_cmd_ts_nanos = loopback_cp.ts_nanos["ASCMLKASteeringCmd"]["RollingCounter"]
