@@ -158,12 +158,10 @@ class CarController(CarControllerBase):
       # Accumulate extra spoofs needed above 33Hz base to reach 40Hz
       self.spoof_accum += (40.0/33.0 - 1.0)
 
+      # Midpoint spoof: one per interval
       if not self.spoof_mid_sent and interval_ns > 0:
         midpoint_ns = self.prev_steer_ts_ns + interval_ns // 2
-        if (CS.loopback_lka_steering_cmd_ts_nanos != 0 and
-            now_nanos - CS.loopback_lka_steering_cmd_ts_nanos < 10_000_000 and
-            now_nanos >= midpoint_ns and
-            now_nanos - self.last_steer_ts_ns >= 26_000_000):
+        if now_nanos >= midpoint_ns and now_nanos - self.last_steer_ts_ns >= 26_000_000:
           paddle_sends.append(gmcan.create_prndl2_command(self.packer_pt, CanBus.POWERTRAIN, True))
           paddle_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN, True))
           self.last_spoof_ts_ns = now_nanos
@@ -172,10 +170,7 @@ class CarController(CarControllerBase):
       # Overflow spoof: insert extra when accumulator allows
       if self.spoof_accum >= 0.5 and not self.spoof_over_sent and interval_ns > 0:
         slot2_ns = self.prev_steer_ts_ns + (interval_ns * 2) // 3
-        if (CS.loopback_lka_steering_cmd_ts_nanos != 0 and
-            now_nanos - CS.loopback_lka_steering_cmd_ts_nanos < 10_000_000 and
-            now_nanos >= slot2_ns and
-            now_nanos - self.last_steer_ts_ns >= 28_000_000):
+        if now_nanos >= slot2_ns and now_nanos - self.last_steer_ts_ns >= 28_000_000:
           paddle_sends.append(gmcan.create_prndl2_command(self.packer_pt, CanBus.POWERTRAIN, True))
           paddle_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN, True))
           self.last_spoof_ts_ns = now_nanos
@@ -196,7 +191,7 @@ class CarController(CarControllerBase):
 
     if hasattr(self, "off_schedule_ns"):
       for i, t_ns in enumerate(self.off_schedule_ns):
-        if not self.off_sent[i] and now_nanos >= t_ns and now_nanos - self.last_steer_ts_ns >= 18_000_000:
+        if not self.off_sent[i] and now_nanos >= t_ns and now_nanos - self.last_steer_ts_ns >= 24_000_000:
           paddle_sends.append(gmcan.create_prndl2_command(self.packer_pt, CanBus.POWERTRAIN, False))
           paddle_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN, False))
           self.off_sent[i] = True
@@ -248,8 +243,8 @@ class CarController(CarControllerBase):
 
     # Merge paddle spoof CAN frames, time-guarded only
     if paddle_sends:
-      # wait at least 15 ms after the last bus0 steer send
-      if now_nanos - self.last_steer_ts_ns >= 15_000_000:
+      # wait at least 24 ms after the last bus0 steer send
+      if now_nanos - self.last_steer_ts_ns >= 24_000_000:
         can_sends.extend(paddle_sends)
 
     if self.CP.openpilotLongitudinalControl:
