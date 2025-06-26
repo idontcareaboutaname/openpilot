@@ -7,7 +7,8 @@ fi
 source "$BASEDIR/launch_env.sh"
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
-ONCE_FLAG_FILE="/cache/openpilot/.TRX_done"
+ONCE_FLAG_FILE="/data/openpilot/.setup_done"
+
 function agnos_init {
   # TODO: move this to agnos
   sudo rm -f /data/etc/NetworkManager/system-connections/*.nmmeta
@@ -36,6 +37,7 @@ function one_time_setup {
     echo "Performing one-time setup tasks..."
     
     # Run once:
+    echo "Wiping old params..."
     echo -en "tomb-raider" > /data/params/d/Model
     echo -en "tomb-raider" > /cache/params/d/Model
     echo "Vikander bb"
