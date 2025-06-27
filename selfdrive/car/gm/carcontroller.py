@@ -172,7 +172,7 @@ class CarController(CarControllerBase):
         self.last_interval_ns = interval_ns
 
       # Accumulate extra spoofs needed above 33Hz base to reach 40Hz
-      self.spoof_accum += (40.0/33.0 - 1.0)
+      self.spoof_accum += credits_per_cycle
 
       # Midpoint spoof: one per interval
       if not self.spoof_mid_sent and interval_ns > 0:
