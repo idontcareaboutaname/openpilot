@@ -126,6 +126,9 @@ class CarController(CarControllerBase):
     # Send CAN commands.
     can_sends = []
     paddle_sends = []
+    # Default guard thresholds to avoid undefined variables when not in regen
+    mid_guard_ns = 20_000_000
+    ofl_guard_ns = 26_000_000
 
     raw_regen_active = (
       self.CP.carFingerprint in CC_REGEN_PADDLE_CAR and
@@ -149,6 +152,19 @@ class CarController(CarControllerBase):
       # Interval between last two bus-0 steer sends
       interval_ns = self.last_steer_ts_ns - self.prev_steer_ts_ns
 
+      # Dynamically derive guard thresholds from measured steer interval
+      # Target midpoint guard ≈17% of interval (~5 ms on 30 ms), clamp to [12 ms, interval - 10 ms]
+      mid_guard_ns = int(interval_ns * 0.17)
+      mid_guard_ns = clip(mid_guard_ns, 12_000_000, interval_ns - 10_000_000)
+      # Target overflow guard ≈66% of interval (~20 ms on 30 ms), clamp to [mid_guard_ns + 2 ms, interval - 5 ms]
+      ofl_guard_ns = int(interval_ns * 0.66)
+      ofl_guard_ns = clip(ofl_guard_ns, mid_guard_ns + 2_000_000, interval_ns - 5_000_000)
+
+      # Dynamically compute overflow threshold to maintain ~40Hz spoof rate
+      # credits per cycle = (interval_s * 40) - 1
+      credits_per_cycle = (interval_ns / 1e9) * 40.0 - 1.0
+      overflow_thresh = clip(credits_per_cycle * 3.0, 0.5, 1.0)
+
       # New steer interval? clear per-interval flags
       if interval_ns != self.last_interval_ns:
         self.spoof_mid_sent = False
@@ -161,16 +177,16 @@ class CarController(CarControllerBase):
       # Midpoint spoof: one per interval
       if not self.spoof_mid_sent and interval_ns > 0:
         midpoint_ns = self.prev_steer_ts_ns + interval_ns // 2
-        if now_nanos >= midpoint_ns and now_nanos - self.last_steer_ts_ns >= 20_000_000:
+        if now_nanos >= midpoint_ns and now_nanos - self.last_steer_ts_ns >= mid_guard_ns:
           paddle_sends.append(gmcan.create_prndl2_command(self.packer_pt, CanBus.POWERTRAIN, True))
           paddle_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN, True))
           self.last_spoof_ts_ns = now_nanos
           self.spoof_mid_sent = True
 
       # Overflow spoof: insert extra when accumulator allows
-      if self.spoof_accum >= 0.5 and not self.spoof_over_sent and interval_ns > 0:
+      if self.spoof_accum >= overflow_thresh and not self.spoof_over_sent and interval_ns > 0:
         slot2_ns = self.prev_steer_ts_ns + (interval_ns * 2) // 3
-        if now_nanos >= slot2_ns and now_nanos - self.last_steer_ts_ns >= 26_000_000:
+        if now_nanos >= slot2_ns and now_nanos - self.last_steer_ts_ns >= ofl_guard_ns:
           paddle_sends.append(gmcan.create_prndl2_command(self.packer_pt, CanBus.POWERTRAIN, True))
           paddle_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN, True))
           self.last_spoof_ts_ns = now_nanos
@@ -243,8 +259,8 @@ class CarController(CarControllerBase):
 
     # Merge paddle spoof CAN frames, time-guarded only
     if paddle_sends:
-      # wait at least 24 ms after the last bus0 steer send
-      if now_nanos - self.last_steer_ts_ns >= 20_000_000:
+      # wait at least mid_guard_ns after the last bus0 steer send
+      if now_nanos - self.last_steer_ts_ns >= mid_guard_ns:
         can_sends.extend(paddle_sends)
 
     if self.CP.openpilotLongitudinalControl:
