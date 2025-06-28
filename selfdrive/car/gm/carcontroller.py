@@ -1,4 +1,5 @@
 from typing import Tuple
+from openpilot.common.swaglog import cloudlog
 from cereal import car
 from openpilot.common.conversions import Conversions as CV
 from openpilot.common.filter_simple import FirstOrderFilter
@@ -129,6 +130,9 @@ class CarController(CarControllerBase):
     # Default guard thresholds to avoid undefined variables when not in regen
     mid_guard_ns = 20_000_000
     ofl_guard_ns = 26_000_000
+    # Default accumulation and threshold so they exist before dynamic update
+    credits_per_cycle = 0.0
+    overflow_thresh = 0.7
 
     raw_regen_active = (
       self.CP.carFingerprint in CC_REGEN_PADDLE_CAR and
@@ -151,14 +155,25 @@ class CarController(CarControllerBase):
     if raw_regen_active:
       # Interval between last two bus-0 steer sends
       interval_ns = self.last_steer_ts_ns - self.prev_steer_ts_ns
+      # Clamp interval to [20ms, 40ms] to handle jitter
+      interval_ns = clip(interval_ns, 20_000_000, 40_000_000)
 
-      # Dynamically derive guard thresholds from measured steer interval
-      # Target midpoint guard ≈17% of interval (~5 ms on 30 ms), clamp to [12 ms, interval - 10 ms]
-      mid_guard_ns = int(interval_ns * 0.17)
-      mid_guard_ns = clip(mid_guard_ns, 12_000_000, interval_ns - 10_000_000)
-      # Target overflow guard ≈66% of interval (~20 ms on 30 ms), clamp to [mid_guard_ns + 2 ms, interval - 5 ms]
-      ofl_guard_ns = int(interval_ns * 0.66)
-      ofl_guard_ns = clip(ofl_guard_ns, mid_guard_ns + 2_000_000, interval_ns - 5_000_000)
+      # Compute dynamic guards with strict 5ms minimum (works on all, maximizes paddle on fast cars)
+      mid_guard_ns = max(5_000_000, int(interval_ns * 0.17))
+      mid_guard_ns = min(mid_guard_ns, interval_ns - 5_000_000)
+
+      ofl_guard_ns = max(mid_guard_ns + 1_000_000, int(interval_ns * 0.66))
+      ofl_guard_ns = min(ofl_guard_ns, interval_ns - 5_000_000)
+
+      # Log timing diagnostics for paddle spoofing
+      delta_after_ms = (now_nanos - self.last_steer_ts_ns) * 1e-6
+      next_steer_ns = self.prev_steer_ts_ns + interval_ns
+      delta_before_ms = (next_steer_ns - now_nanos) * 1e-6
+      cloudlog.error("paddle timing: mid_guard=%.1fms ofl_guard=%.1fms Δafter=%.1fms Δbefore=%.1fms credits=%.3f thresh=%.3f timer=%d accum=%.3f",
+                    mid_guard_ns * 1e-6, ofl_guard_ns * 1e-6,
+                    delta_after_ms, delta_before_ms,
+                    credits_per_cycle, overflow_thresh,
+                    self.regen_paddle_timer, self.spoof_accum)
 
       # Dynamically compute overflow threshold to maintain ~40Hz spoof rate
       # credits per cycle = (interval_s * 40) - 1
@@ -207,7 +222,7 @@ class CarController(CarControllerBase):
 
     if hasattr(self, "off_schedule_ns"):
       for i, t_ns in enumerate(self.off_schedule_ns):
-        if not self.off_sent[i] and now_nanos >= t_ns and now_nanos - self.last_steer_ts_ns >= 20_000_000:
+        if not self.off_sent[i] and now_nanos >= t_ns and now_nanos - self.last_steer_ts_ns >= mid_guard_ns:
           paddle_sends.append(gmcan.create_prndl2_command(self.packer_pt, CanBus.POWERTRAIN, False))
           paddle_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN, False))
           self.off_sent[i] = True
