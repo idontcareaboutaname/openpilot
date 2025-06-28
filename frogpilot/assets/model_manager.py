@@ -38,7 +38,7 @@ class ModelManager:
 
   @staticmethod
   def fetch_all_model_sizes(repo_url):
-    project_path = "FrogAi/FrogPilot-Resources"
+    project_path = "firestar5683/StarPilot-Resources"
     branch = "Models"
 
     if "github" in repo_url:
@@ -136,9 +136,6 @@ class ModelManager:
 
     outdated_models = downloaded_models - available_models
     for model in outdated_models:
-      if model == "tomb-raider":
-        print(f"Skipping deletion of custom model: {model}")
-        continue
       for model_file in MODELS_PATH.glob(f"{model}.*"):
         print(f"Removing outdated model: {model_file}")
         delete_file(model_file)
@@ -184,24 +181,14 @@ class ModelManager:
       self.download_all_models()
 
   def update_model_params(self, model_info, repo_url):
-    self.available_models = [model["id"] for model in model_info if model["id"] != DEFAULT_TINYGRAD_MODEL]
-    self.model_versions = [model["version"] for model in model_info if model["id"] != DEFAULT_TINYGRAD_MODEL]
+      self.available_models = [model["id"] for model in model_info]
+      self.model_versions = [model["version"] for model in model_info]
 
-    params.put("AvailableModels", ",".join(self.available_models))
-    params.put("AvailableModelNames", ",".join([model["name"] for model in model_info if model["id"] != DEFAULT_TINYGRAD_MODEL]))
-    # Always include "tomb-raider" (TRX) in the available models for UI
-    if "tomb-raider" not in self.available_models:
-      self.available_models.append("tomb-raider")
       params.put("AvailableModels", ",".join(self.available_models))
-      # Also append to names for display
-      current_names = params.get("AvailableModelNames", encoding="utf-8") or ""
-      names_list = current_names.split(",") if current_names else []
-      if "TRX" not in names_list:
-        names_list.append("TRX")
-        params.put("AvailableModelNames", ",".join([n for n in names_list if n]))
-    params.put("ExperimentalModels", ",".join([model["id"] for model in model_info if model.get("experimental", False)]))
-    params.put("ModelVersions", ",".join(self.model_versions))
-    print("Models list updated successfully")
+      params.put("AvailableModelNames", ",".join([model["name"] for model in model_info]))
+      params.put("ExperimentalModels", ",".join([model["id"] for model in model_info if model.get("experimental", False)]))
+      params.put("ModelVersions", ",".join(self.model_versions))
+      print("Models list updated successfully")
 
   def update_models(self, boot_run=False):
     if self.downloading_model:
