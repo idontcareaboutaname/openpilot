@@ -80,7 +80,7 @@ class CarInterface(CarInterfaceBase):
       params = non_linear_torque_params["left"]
     a, b, c, d = params
     steer_torque = (sig(latcontrol_inputs.lateral_acceleration * a) * b) + (latcontrol_inputs.lateral_acceleration * c) + d
-    return (steer_torque / float(torque_params.latAccelFactor)) + friction
+    return float(steer_torque) + friction
 
   def torque_from_lateral_accel_neural(self, latcontrol_inputs: LatControlInputs, torque_params: car.CarParams.LateralTorqueTuning, lateral_accel_error: float,
                                        lateral_accel_deadzone: float, friction_compensation: bool, gravity_adjusted: bool) -> float:
