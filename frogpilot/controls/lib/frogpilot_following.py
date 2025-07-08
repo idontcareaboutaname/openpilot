@@ -71,7 +71,7 @@ class FrogPilotFollowing:
         pitch = sm['carControl'].orientationNED[1]
       else:
         pitch = 0.0
-      self.desired_follow_distance = int(desired_follow_distance(v_ego, self.frogpilot_planner.lead_one.vLead, self.t_follow, pitch=pitch))
+      self.desired_follow_distance = int(desired_follow_distance(v_ego, self.frogpilot_planner.lead_one.vLead, self.t_follow, pitch=-pitch))
     else:
       self.desired_follow_distance = 0
 
