@@ -62,7 +62,7 @@ T_DIFFS = np.diff(T_IDXS, prepend=[0.])
 COMFORT_BRAKE = 2.5
 ACCELERATION_DUE_TO_GRAVITY = 9.81  # m/s^2
 # Multiplier for gravity effect, tune as needed
-BRAKE_K = 2.0  # Multiplier for gravity effect, tune as needed
+BRAKE_K = 8.0  # Multiplier for gravity effect, tune as needed
 # Tinygrad model change from commaai/openpilot pull request #35567
 STOP_DISTANCE = 4.0
 
