@@ -62,7 +62,7 @@ T_DIFFS = np.diff(T_IDXS, prepend=[0.])
 COMFORT_BRAKE = 2.5
 ACCELERATION_DUE_TO_GRAVITY = 9.81  # m/s^2
 # Multiplier for gravity effect, tune as needed
-BRAKE_K = 8.0  # Multiplier for gravity effect, tune as needed
+BRAKE_K = 3.0  # Multiplier for gravity effect, tune as needed
 # Tinygrad model change from commaai/openpilot pull request #35567
 STOP_DISTANCE = 4.0
 
@@ -372,11 +372,16 @@ class LongitudinalMpc:
     lead_xv_0 = self.process_lead(lead_one)
     lead_xv_1 = self.process_lead(lead_two)
 
+    # Only apply pitch (grade) compensation if a real lead is present; fabricated leads get pitch=0.0
+    pitch_lead0 = pitch if lead_one.status else 0.0
+    pitch_lead1 = pitch if lead_two.status else 0.0
+
+    # Only apply pitch (grade) compensation for lead obstacles, never for cruise.
     # To estimate a safe distance from a moving lead, we calculate how much stopping
     # distance that lead needs as a minimum. We can add that to the current distance
     # and then treat that as a stopped car/obstacle at this new distance.
-    lead_0_obstacle = lead_xv_0[:,0] + get_stopped_equivalence_factor(lead_xv_0[:,1], pitch=pitch)
-    lead_1_obstacle = lead_xv_1[:,0] + get_stopped_equivalence_factor(lead_xv_1[:,1], pitch=pitch)
+    lead_0_obstacle = lead_xv_0[:,0] + get_stopped_equivalence_factor(lead_xv_0[:,1], pitch=pitch_lead0)
+    lead_1_obstacle = lead_xv_1[:,0] + get_stopped_equivalence_factor(lead_xv_1[:,1], pitch=pitch_lead1)
 
     self.params[:,0] = ACCEL_MIN
     # negative accel constraint causes problems because negative speed is not allowed
@@ -394,7 +399,8 @@ class LongitudinalMpc:
       v_cruise_clipped = np.clip(v_cruise * np.ones(N+1),
                                  v_lower,
                                  v_upper)
-      cruise_obstacle = np.cumsum(T_DIFFS * v_cruise_clipped) + get_safe_obstacle_distance(v_cruise_clipped, t_follow, pitch=pitch)
+      # Only apply pitch (grade) compensation for lead obstacles, never for cruise.
+      cruise_obstacle = np.cumsum(T_DIFFS * v_cruise_clipped) + get_safe_obstacle_distance(v_cruise_clipped, t_follow, pitch=0.0)  # No pitch compensation for cruise obstacle
       x_obstacles = np.column_stack([lead_0_obstacle, lead_1_obstacle, cruise_obstacle])
       self.source = SOURCES[np.argmin(x_obstacles[0])]
 
@@ -440,9 +446,9 @@ class LongitudinalMpc:
     # Check if it got within lead comfort range
     # TODO This should be done cleaner
     if self.mode == 'blended':
-      if any((lead_0_obstacle - get_safe_obstacle_distance(self.x_sol[:,1], t_follow, pitch=pitch))- self.x_sol[:,0] < 0.0):
+      if any((lead_0_obstacle - get_safe_obstacle_distance(self.x_sol[:,1], t_follow, pitch=pitch_lead0))- self.x_sol[:,0] < 0.0):
         self.source = 'lead0'
-      if any((lead_1_obstacle - get_safe_obstacle_distance(self.x_sol[:,1], t_follow, pitch=pitch))- self.x_sol[:,0] < 0.0) and \
+      if any((lead_1_obstacle - get_safe_obstacle_distance(self.x_sol[:,1], t_follow, pitch=pitch_lead1))- self.x_sol[:,0] < 0.0) and \
          (lead_1_obstacle[0] - lead_0_obstacle[0]):
         self.source = 'lead1'
 

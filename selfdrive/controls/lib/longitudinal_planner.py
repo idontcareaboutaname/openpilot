@@ -164,10 +164,13 @@ class LongitudinalPlanner:
     else:
       accel_coast = ACCEL_MAX
 
-    if hasattr(sm['carControl'], 'orientationNED') and len(sm['carControl'].orientationNED) > 1:
-      pitch = sm['carControl'].orientationNED[1]
-    else:
-      pitch = 0.0
+    # Only set pitch from orientationNED[1] if a real lead is present and long_pitch is enabled
+    pitch = 0.0  # default
+    lead_present = self.lead_one.status or self.lead_two.status
+    if lead_present and frogpilot_toggles.long_pitch:
+      if hasattr(sm['carControl'], 'orientationNED') and len(sm['carControl'].orientationNED) > 1:
+        pitch = sm['carControl'].orientationNED[1]  # Positive = uphill, negative = downhill (check hardware convention)
+    pitch_for_mpc = pitch
 
     v_ego = max(sm['carState'].vEgo, sm['carState'].vEgoCluster)
     v_cruise = sm['frogpilotPlan'].vCruise
@@ -228,7 +231,7 @@ class LongitudinalPlanner:
     if not self.mlsim:
       self.mpc.mode = dec_mpc_mode
     self.mpc.update(self.lead_one, self.lead_two, v_cruise, x, v, a, j, sm['frogpilotPlan'].tFollow,
-                    sm['frogpilotCarState'].trafficModeEnabled, personality=sm['controlsState'].personality, pitch=pitch)
+                    sm['frogpilotCarState'].trafficModeEnabled, personality=sm['controlsState'].personality, pitch=pitch_for_mpc)
 
     self.a_desired_trajectory_full = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.a_solution)
     self.v_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.v_solution)
